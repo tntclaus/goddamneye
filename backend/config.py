@@ -31,6 +31,31 @@ class Settings(BaseSettings):
     recording_segment_duration: int = 3600  # 1 hour in seconds
     recording_retention_days: int = 30
 
+    # Recording encoding settings (H.265/HEVC via libx265)
+    # CRF (Constant Rate Factor): 0-51, lower = better quality, higher = smaller files
+    # 23 = good quality, 28 = good balance, 32 = smaller files
+    recording_crf: int = 28
+    # Encoding speed preset - tradeoff between encode time and file size:
+    # - "fast": Quick encoding, larger files. Use if CPU is limited.
+    # - "balanced": Good default. Moderate encode time, good compression.
+    # - "compact": Slow encoding, smallest files. Maximum storage savings.
+    recording_quality: str = "balanced"
+    # Scale down recordings to save space (e.g., "1280:720" for 720p, "" to keep original)
+    recording_scale: str = ""
+
+    def get_x265_preset(self) -> str:
+        """Get x265 preset based on quality setting.
+
+        Returns:
+            x265 preset string for FFmpeg.
+        """
+        presets = {
+            "fast": "veryfast",      # Quick encode, larger files
+            "balanced": "fast",       # Good balance (default)
+            "compact": "medium",      # Slow encode, smallest files
+        }
+        return presets.get(self.recording_quality.lower(), presets["balanced"])
+
     # FFmpeg
     ffmpeg_path: str = "ffmpeg"
 

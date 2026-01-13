@@ -130,11 +130,18 @@ class StreamWorker:
             date_path = self._storage_path / datetime.now().strftime("%Y-%m-%d")
             date_path.mkdir(parents=True, exist_ok=True)
 
+            # Build recording encoding options
+            recording_opts = self._build_recording_encoding_options()
+
             cmd.extend([
                 # Map video stream again for second output
                 "-map", "0:v:0",
-                # Copy video codec
-                "-c:v", "copy",
+            ])
+
+            # Add encoding options (codec, quality, scale, etc.)
+            cmd.extend(recording_opts)
+
+            cmd.extend([
                 # Segment format for hourly recordings
                 "-f", "segment",
                 "-segment_time", str(settings.recording_segment_duration),
@@ -153,6 +160,44 @@ class StreamWorker:
             pass
 
         return cmd
+
+    def _build_recording_encoding_options(self) -> list[str]:
+        """Build FFmpeg encoding options for recordings.
+
+        Uses H.265/HEVC (libx265) for highly efficient storage.
+        H.265 provides ~50% better compression than H.264 at same quality.
+
+        Quality presets control encoding speed vs file size:
+        - fast: veryfast preset (quick encode, larger files)
+        - balanced: fast preset (good default)
+        - compact: medium preset (slow encode, smallest files)
+        """
+        opts = []
+
+        # Get x265 preset from quality setting, CRF is fixed
+        preset = settings.get_x265_preset()
+
+        # H.265/HEVC encoding with libx265
+        opts.extend([
+            "-c:v", "libx265",
+            "-preset", preset,
+            "-crf", str(settings.recording_crf),
+            # Suppress x265 info banner
+            "-x265-params", "log-level=error",
+        ])
+
+        # Video filters (scaling)
+        if settings.recording_scale:
+            opts.extend(["-vf", f"scale={settings.recording_scale}"])
+
+        # Optimize for streaming/seeking in recordings
+        opts.extend([
+            "-movflags", "+faststart",  # Enable fast start for MP4
+            "-pix_fmt", "yuv420p",  # Ensure compatible pixel format
+            "-tag:v", "hvc1",  # Use hvc1 tag for better Apple compatibility
+        ])
+
+        return opts
 
     def _has_audio_stream(self) -> bool:
         """Check if camera stream has audio (simplified check)."""
